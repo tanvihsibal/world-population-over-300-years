@@ -1,0 +1,124 @@
+---
+title: "world-population-over-300-years"
+author: "Tanvi Hasija"
+date: "2023-02-26"
+output: html_document
+knit: (
+  function(input_file, encoding) {
+    out_dir <- 'docs';
+    rmarkdown::render(input_file,
+      encoding=encoding,
+      output_file=file.path(dirname(input_file), out_dir, 'index.html')
+    )
+  }
+ )
+---
+
+### Dataset
+
+We will use Gapminder Population Data version 7. It can be downloaded from [here](https://gapm.io/dl_popv7). Download this MS Excel file and save it in the `data` directory of this repo as `population_data.xlsx`.
+
+### R Packages
+
+#### Download the required packages.
+
+Note: Run these commands manually in the R console
+
+    install.packages("rnaturalearth")
+    install.packages("stringr")
+    install.packages("readxl")
+    install.packages("dplyr")
+    install.packages("ggplot2")
+    install.packages("plotly")
+
+#### Attach these packages
+
+```{r}
+library(rnaturalearth)
+library(stringr)
+library(readxl)
+library(dplyr)
+library(scales)
+library(ggplot2)
+library(plotly)
+```
+
+### Capturing and cleaning the data
+
+#### Capture the World Map
+
+```{r}
+world_map = ne_countries(returnclass = "sf")
+```
+
+#### Read the dowloaded Population Data Xlsx and understand its structure
+
+Note: the required data is in the 4th sheet of the MS Excel file.
+
+```{r}
+world_pop = read_xlsx("data/population_data.xlsx", sheet = 4)
+names(world_pop)
+```
+
+#### Check for the differences in country names in the Population data and the world map data (for eg "United States" vs "USA")
+
+```{r}
+setdiff(world_map$sovereignt, world_pop$name)
+```
+
+#### Fix the anomallies and rename the column in the Population data to match with the column name in the world map data
+
+```{r}
+world_pop = world_pop %>% 
+  mutate(sovereignt = name) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Tanzania", "United Republic of Tanzania")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "United States", "United States of America")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Congo, Dem. Rep.", "Democratic Republic of the Congo")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Bahamas", "The Bahamas")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Serbia", "Republic of Serbia")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Macedonia, FYR", "Macedonia")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Slovak Republic", "Slovakia")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Congo, Rep.", "Republic of Congo")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Kyrgyz Republic", "Kyrgyzstan")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Lao", "Laos")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Cote d'Ivoire", "Ivory Coast")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Timor-Leste", "East Timor")) %>% 
+  mutate(sovereignt = replace(sovereignt, sovereignt == "Guinea-Bissau", "Guinea Bissau"))
+```
+
+#### Preparing the data
+
+Now we can join our two datasets, pick the columns we want for visualizing and remove missing values.
+
+```{r}
+world_data = inner_join(world_map, world_pop, by = "sovereignt") %>%
+  select(geo, sovereignt, Population, time, geometry ) %>%
+  na.omit()
+head(world_data)
+```
+
+We are only visualizing the data every two years, so we will remove the rest of the data too.
+```{r}
+world_data = world_data %>% 
+  filter(time %in% seq(1800, 2100, by = 20))
+head(world_data)
+```
+
+### Plotting
+
+```{r}
+ggplotly(
+  ggplot(
+    world_data,
+    aes(geometry = geometry, frame = time)
+    ) +
+    geom_sf(aes(fill= Population)) +
+    theme_void() +
+    ggtitle("World Population Prediction 1800 - 2100") +
+    scale_fill_distiller(
+      palette = "RdBu",
+      label = number_format(scale=1e-6, suffix = "M"),
+      limits = c(0, 2000000000)
+      )
+  )
+```
